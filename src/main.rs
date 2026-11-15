@@ -420,3 +420,60 @@ fn main() {
         println!();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_ipv4, parse_ipv6, Stats};
+
+    #[test]
+    fn classifies_tcp_after_ipv6_hop_by_hop_header() {
+        let mut packet = vec![0u8; 40 + 8 + 4];
+        packet[0] = 0x60;
+        packet[6] = 0; // Hop-by-Hop Options
+        packet[40] = 6; // TCP follows
+        packet[41] = 0; // 8-byte extension header
+        packet[48..50].copy_from_slice(&12345u16.to_be_bytes());
+        packet[50..52].copy_from_slice(&443u16.to_be_bytes());
+
+        let mut stats = Stats::default();
+        parse_ipv6(&packet, &mut stats);
+
+        assert_eq!(stats.tcp, 1);
+        assert_eq!(stats.protocols.get("TLS"), Some(&1));
+    }
+
+    #[test]
+    fn does_not_classify_ports_in_non_initial_ipv4_fragment() {
+        let mut packet = vec![0u8; 24];
+        packet[0] = 0x45;
+        packet[6..8].copy_from_slice(&1u16.to_be_bytes()); // fragment offset is nonzero
+        packet[9] = 6; // TCP
+        packet[20..22].copy_from_slice(&12345u16.to_be_bytes());
+        packet[22..24].copy_from_slice(&443u16.to_be_bytes());
+
+        let mut stats = Stats::default();
+        parse_ipv4(&packet, &mut stats);
+
+        assert_eq!(stats.tcp, 1);
+        assert_eq!(stats.protocols.get("TCP"), Some(&1));
+        assert!(!stats.protocols.contains_key("TLS"));
+    }
+
+    #[test]
+    fn non_initial_ipv6_fragment_does_not_infer_tcp_ports() {
+        let mut packet = vec![0u8; 40 + 8 + 4];
+        packet[0] = 0x60;
+        packet[6] = 44; // Fragment header
+        packet[40] = 6; // TCP follows
+        packet[42..44].copy_from_slice(&8u16.to_be_bytes()); // nonzero fragment offset
+        packet[48..50].copy_from_slice(&12345u16.to_be_bytes());
+        packet[50..52].copy_from_slice(&443u16.to_be_bytes());
+
+        let mut stats = Stats::default();
+        parse_ipv6(&packet, &mut stats);
+
+        assert_eq!(stats.tcp, 1);
+        assert_eq!(stats.protocols.get("TCP"), Some(&1));
+        assert!(!stats.protocols.contains_key("TLS"));
+    }
+}

@@ -10,8 +10,8 @@ The project is intentionally small and dependency-free. It focuses on **offline 
 
 ## ✨ Features
 
-- Follows common IPv6 extension headers before classifying TCP/UDP ports, including DNS, HTTP and TLS hints.
-- Avoids interpreting transport ports from non-initial IPv4 fragments.
+- Follows common IPv6 Hop-by-Hop, Routing, Destination Options, Mobility, Fragment and AH headers before classifying TCP/UDP ports, including DNS, HTTP and TLS hints. Extension traversal is bounded to 16 headers per packet.
+- Avoids interpreting transport ports from non-initial IPv4 and IPv6 fragments; those packets are counted as TCP/UDP without guessing an application protocol from fragment payload bytes.
 
 
 - 📦 PCAP support
