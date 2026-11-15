@@ -103,11 +103,12 @@ fn parse_ipv4(packet: &[u8], stats: &mut Stats) {
     let dst = Ipv4Addr::new(packet[16], packet[17], packet[18], packet[19]).to_string();
     stats.record_talker(&src);
     let proto = packet[9];
+    let fragment_offset = u16::from_be_bytes([packet[6], packet[7]]) & 0x1fff;
     let payload = &packet[ihl..];
     match proto {
         6 => {
             stats.tcp += 1;
-            if payload.len() >= 4 {
+            if fragment_offset == 0 && payload.len() >= 4 {
                 let sp = u16::from_be_bytes([payload[0], payload[1]]);
                 let dp = u16::from_be_bytes([payload[2], payload[3]]);
                 stats.record_protocol(protocol_name(sp, dp, "TCP"));
@@ -118,7 +119,7 @@ fn parse_ipv4(packet: &[u8], stats: &mut Stats) {
         }
         17 => {
             stats.udp += 1;
-            if payload.len() >= 4 {
+            if fragment_offset == 0 && payload.len() >= 4 {
                 let sp = u16::from_be_bytes([payload[0], payload[1]]);
                 let dp = u16::from_be_bytes([payload[2], payload[3]]);
                 stats.record_protocol(protocol_name(sp, dp, "UDP"));
@@ -143,14 +144,87 @@ fn parse_ipv6(packet: &[u8], stats: &mut Stats) {
     src_oct.copy_from_slice(&packet[8..24]);
     let src = Ipv6Addr::from(src_oct).to_string();
     stats.record_talker(&src);
-    match packet[6] {
+
+    let mut next_header = packet[6];
+    let mut offset = 40usize;
+    let mut non_initial_fragment = false;
+    for _ in 0..16 {
+        match next_header {
+            0 | 43 | 60 | 135 => {
+                if packet.len().saturating_sub(offset) < 2 {
+                    stats.other += 1;
+                    stats.record_protocol("Other");
+                    return;
+                }
+                let length = (usize::from(packet[offset + 1]) + 1) * 8;
+                if length > packet.len().saturating_sub(offset) {
+                    stats.other += 1;
+                    stats.record_protocol("Other");
+                    return;
+                }
+                let following = packet[offset];
+                offset += length;
+                next_header = following;
+                continue;
+            }
+            44 => {
+                if packet.len().saturating_sub(offset) < 8 {
+                    stats.other += 1;
+                    stats.record_protocol("Other");
+                    return;
+                }
+                let fragment = u16::from_be_bytes([packet[offset + 2], packet[offset + 3]]);
+                non_initial_fragment = fragment & 0xfff8 != 0;
+                let following = packet[offset];
+                offset += 8;
+                next_header = following;
+                if non_initial_fragment {
+                    break;
+                }
+                continue;
+            }
+            51 => {
+                if packet.len().saturating_sub(offset) < 2 {
+                    stats.other += 1;
+                    stats.record_protocol("Other");
+                    return;
+                }
+                let length = (usize::from(packet[offset + 1]) + 2) * 4;
+                if length > packet.len().saturating_sub(offset) {
+                    stats.other += 1;
+                    stats.record_protocol("Other");
+                    return;
+                }
+                let following = packet[offset];
+                offset += length;
+                next_header = following;
+                continue;
+            }
+            _ => break,
+        }
+    }
+
+    let payload = &packet[offset..];
+    match next_header {
         6 => {
             stats.tcp += 1;
-            stats.record_protocol("TCP");
+            if !non_initial_fragment && payload.len() >= 4 {
+                let sp = u16::from_be_bytes([payload[0], payload[1]]);
+                let dp = u16::from_be_bytes([payload[2], payload[3]]);
+                stats.record_protocol(protocol_name(sp, dp, "TCP"));
+            } else {
+                stats.record_protocol("TCP");
+            }
         }
         17 => {
             stats.udp += 1;
-            stats.record_protocol("UDP");
+            if !non_initial_fragment && payload.len() >= 4 {
+                let sp = u16::from_be_bytes([payload[0], payload[1]]);
+                let dp = u16::from_be_bytes([payload[2], payload[3]]);
+                stats.record_protocol(protocol_name(sp, dp, "UDP"));
+            } else {
+                stats.record_protocol("UDP");
+            }
         }
         58 => stats.record_protocol("ICMPv6"),
         _ => {
