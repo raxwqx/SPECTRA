@@ -10,6 +10,10 @@ The project is intentionally small and dependency-free. It focuses on **offline 
 
 ## ✨ Features
 
+- Follows common IPv6 extension headers before classifying TCP/UDP ports, including DNS, HTTP and TLS hints.
+- Avoids interpreting transport ports from non-initial IPv4 fragments.
+
+
 - 📦 PCAP support
 - 📦 PCAPNG support
 - 🌐 IPv4 and IPv6 statistics
