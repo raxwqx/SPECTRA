@@ -37,9 +37,48 @@ HTTP                            2
 Top Talkers
 ────────────────────────────────────
 127.0.0.1                      20
+
+Top Conversations
+────────────────────────────────────
+127.0.0.1 ↔ 127.0.0.1          20
 ```
 
 The original test capture also contained an incomplete trailing record. SPECTRA reported it as a warning instead of aborting after the 20 complete records.
+
+## JSON report
+
+Use `--json` for automation, dashboards, or handing results to another tool:
+
+```bash
+./target/release/spectra --json test.pcap
+```
+
+```json
+{
+  "tool": "SPECTRA",
+  "version": "0.2.0",
+  "file": "test.pcap",
+  "packets": 20,
+  "ipv4": 20,
+  "ipv6": 0,
+  "tcp": 20,
+  "udp": 0,
+  "other": 0,
+  "protocols": {
+    "HTTP": 2,
+    "TCP": 18
+  },
+  "top_talkers": {
+    "127.0.0.1": 20
+  },
+  "conversations": {
+    "127.0.0.1 <-> 127.0.0.1": 20
+  },
+  "warnings": []
+}
+```
+
+Conversation keys are normalized as `A <-> B`, so traffic in both directions is counted once per endpoint pair.
 
 ## Notes
 

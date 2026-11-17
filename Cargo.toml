@@ -1,8 +1,19 @@
 [package]
 name = "spectra"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-description = "Lightweight offline PCAP/PCAPNG network traffic analyzer"
+rust-version = "1.82"
+description = "Lightweight offline PCAP/PCAPNG traffic analyzer with conversation tracking and JSON reports"
 license = "MIT"
+readme = "README.md"
+repository = "https://github.com/raxwqx/SPECTRA"
+homepage = "https://github.com/raxwqx/SPECTRA"
+keywords = ["pcap", "pcapng", "network-analysis", "forensics", "cli"]
+categories = ["command-line-utilities", "network-programming"]
 
 [dependencies]
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
